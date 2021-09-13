@@ -1,20 +1,20 @@
 # kong-rate-limiting-golang
 
-### 特性
-- 使用golang编写的一个kong限流插件
-- 限流支持并发
-- 精准限流
-- 限流配置支持and与or的匹配规则进行限流
+### Characteristics
+- A Kong rate limiting plug-in written in golang
+- Rate limit supports concurrency
+- Accurate rate limit
+- Rate limiting configuration supports and and or matching rules for current limiting
 
-### 环境要求
-- kong版本在2.0以上才支持go插件(但是官网文档说2.0.5版本修复了go插件间歇性被kill的问题，所以建议使用2.0.5及以上版本，更新详情请查阅：https://github.com/Kong/kong/blob/master/CHANGELOG.md#205)
+### Environmental Requirements
+- The kong version is 2.0 or higher to support the go plug-in (but the official website document says that version 2.0.5 fixes the problem of intermittently killing the go plug-in, so it is recommended to use version 2.0.5 and above. For update details, please refer to: https://github. com/Kong/kong/blob/master/CHANGELOG.md#205)
 
-### 部署方式一：使用Docker(可直接clone仓库，执行make相关命令构建kong镜像）【如果clone了代码，可以在项目根目录使用make run-kong-konga-pg运行kong、postgres及konga全套环境】
-- 拉镜像
+### Deployment Method 1：Use Docker(Clone the repo directly，Execute make related commands to build kong image）【If the code is cloned, you can use make run-kong-konga-pg to run the full set of kong, postgres and konga environments in the project root directory]】
+- Pull Mirror
 ```
 docker pull lampnick/kong-rate-limiting-plugin-golang:latest
 ```
-- 运行docker
+- Run docker
 ```
 docker run --rm --name kong-rate-limiting-plugin-golang \
     -e "KONG_LOG_LEVEL=info" \
@@ -25,44 +25,44 @@ docker run --rm --name kong-rate-limiting-plugin-golang \
     -p 8444:8444 \
     lampnick/kong-rate-limiting-plugin-golang:latest
 ```
-- 测试插件是否加载成功
+- Test whether the plugin is loaded successfully
 ```
 curl http://localhost:8001/ |grep --color custom-rate-limiting
 ```
 
-### 部署方式二：服务器编译部署（牛刀小试,只需简单几步即可体验本插件）
-- clone本项目到/etc/kong/
+### Deployment Method 2: server compilation and deployment (a small test, you can experience this plug-in in a few simple steps)
+- clone this project to /etc/kong/
 ```
 mkdir /etc/kong
 cd /etc/kong
 git clone https://github.com/lampnick/kong-rate-limiting-golang.git
 ```
-- 修改kong配置文件
+- Modify the kong configuration file
 ```
 plugins = bundled,custom-rate-limiting
 go_plugins_dir = /etc/kong/plugins
 go_pluginserver_exe = /usr/local/bin/go-pluginserver
 ```
-- 构建go-pluginserver
+- Build go-pluginserver
 ```
-在go-pluginserver中执行go build github.com/Kong/go-pluginserver
-会生成 go-pluginserver文件，复制到/usr/local/bin目录
+Execute go build github.com/Kong/go-pluginserver in go-pluginserver
+The go-pluginserver file will be generated and copied to the /usr/local/bin directory
 ```
--  编译go插件
+-  Compile the go plugin
 ```
 go build -buildmode plugin custom-rate-limiting.go
 ```
-- 将生成的.so文件放到go_plugins_dir(上面配置为/etc/kong/plugins)定义的目录中
+- Put the generated .so file in the directory defined by go_plugins_dir (configured as /etc/kong/plugins above)
 ```.env
 cp custom-rate-limiting.so /etc/kong/plugins/
 ```
-- 重启kong
+- Restart kong
 ```
 kong prepare && kong reload
 ```
-- 在konga中配置插件
-    - 自行配置route、service等其他配置
-    - konga json测试配置
+- Configure the plugin in Konga
+    - Configure route, service and other configurations by yourself
+    - Konga json test configuration
         ```
         [{
             "type": "header,query,body",
@@ -74,58 +74,58 @@ kong prepare && kong reload
             "value": "nick,jack,star"
         }]
         ```
-    - konga 配置
+    - konga placement:
     ![image](http://www.lampnick.com/wp-content/uploads/2020/09/kong-config.png)
 
-- 测试请求是否正常，规则是否生效（postman 显示header或者浏览器调试模式查看）
+- Test whether the request is normal and whether the rule takes effect (postman displays the header or the browser debug mode to view)
     ![image](http://www.lampnick.com/wp-content/uploads/2020/09/kong-post-header-show-2.png)
 
-- siege压测,查看限流规则是否生效(返回429状态码，是被限流的请求，图中总请求40个，配置的QPS为20个，却没有20个被限流是因为这些请求并没有在1S内被限制，跨了1S时间)
+- siege pressure test to check whether the current limiting rule is in effect (returns the 429 status code, which is a current limited request. In the figure, there are 40 requests in total. The configured QPS is 20, but there are not 20 current limited because these requests are not. Restricted within 1S, spanning 1S time)
 ![image](http://www.lampnick.com/wp-content/uploads/2020/09/rate-limiting.png)
 
-### 插件开发流程
-1. 定义一个结构体类型保存配置文件
+### Plug-in development process
+1.Define a structure type to save the configuration file
 ```
-用lua写的插件通过schema来指定怎样读取和验证来自数据库和Admin API中的配置数据。由于GO是静态类型语言，都需要用配置结构体定义
+The plug-in written in lua specifies how to read and verify the configuration data from the database and the Admin API through the schema. Since GO is a statically typed language, it needs to be defined with a configuration structure
 type MyConfig struct {
-    Path   string //这里配置的会在konga添加插件时显示出来
+    Path   string //The configuration here will be displayed when konga adds the plug-in
     Reopen bool
 }
-公有属性将会被配置数据填充，如果希望在数据库中使用不同的名称，可以使用encoding/json加tag的方式
+Public attributes will be filled with configuration data. If you want to use a different name in the database, you can use encoding/json plus tag
 type MyConfig struct {
     Path   string `json:my_file_path`
     Reopen bool   `json:reopen`
 }
 ```
-2. 使用New()创建一个实例
+2. Use New() to create an instance
 ```
-你的go插件必须定义一个名叫New的函数来创建这个类型的实例并返回一个interface{}类型
+Your go plugin must define a function named New to create an instance of this type and return an interface{} type
 func New() interface{} {
     return &MyConfig{}
 }
 ```
-3. 添加处理阶段方法
+3. Add processing stage method
 ```
-你可以在请求的生命周期的各个阶段实现自定义的逻辑。如在"access"阶段,定义一个名为Access的方法
+You can implement custom logic at various stages of the request's life cycle. For example, in the "access" phase, define a method named Access
 func (conf *MyConfig) Access (kong *pdk.PDK) {
   ...
 }
-你可以实现自定义逻辑的阶段方法有如下几种
+There are several phase methods you can implement custom logic as follows:
 Certificate
 Rewrite
 Access
 Preread
 Log
 ```
-4. 编译go插件
+4. Compile the go plugin
 ```
 go build -buildmode plugin  custom-rate-limiting.go
 ```
-5. 将生成的.so文件放到go_plugins_dir定义的目录中
+5. Put the generated .so file in the directory defined by go_plugins_dir
 ```.env
 cp custom-rate-limiting.so ../plugins/
 ```
-6. 重启kong（平滑重启）
+6. Restart kong (smooth restart)
 ```
 kong prepare && kong reload
 ```
